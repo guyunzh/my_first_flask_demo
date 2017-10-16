@@ -53,6 +53,40 @@ class User(UserMixin,db.Model):
         db.session.add(self)
         return True
 
+    def reset_password(self,token,new_password):        #用来确认用户重置密码，判断令牌
+        s=Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data=s.loads(token)
+        except:
+            return False
+        if data.get('confirm') != self.id:
+            return False
+        self.password=new_password
+        db.session.add(self)
+        return True
+
+    def generate_email_reset_token(self,new_email,expiration=3600):#生成修改邮箱令牌
+        s = Serializer(current_app.config['SECRET_KEY'], expiration)
+        return s.dumps({'change_email': self.id,'new_email':new_email})
+
+    def change_email(self,token):           #判断邮箱令牌，确认后修改邮箱，此时注意邮箱是已经激活的
+        s=Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data=s.loads(token)
+        except:
+            return False
+        if data.get('change_email') != self.id:
+            return False
+        new_email=data.get('new_email')
+        if new_email is None:
+            return False
+        if self.query.filter_by(email=new_email).first() is not None:
+            return False
+        self.email = new_email
+        db.session.add(self)
+        return True
+
+
 @login_manager.user_loader      #用来回调用户的标识符来确认这个用户身份
 def load_user(user_id):
     return User.query.get(int(user_id))
