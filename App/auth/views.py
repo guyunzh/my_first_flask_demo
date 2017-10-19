@@ -52,11 +52,13 @@ def confirm(token):
         flash('The confirmation link is invalid or has expired.')
     return redirect(url_for('main.index'))
 
-@auth.before_app_request        #用来处理注册但是未邮箱确认的用户所能看到的信息
-def before_request():
-    if current_user.is_authenticated and not current_user.confirmed and request.endpoint[:5] !='auth.'\
-        and request.endpoint !='static':
-        return redirect(url_for('auth.unconfirmed'))
+@auth.before_app_request        #before_app_request是一个钩子，每次请求都会调用该视图函数
+def before_request():           #用来处理注册但是未邮箱确认的用户所能看到的信息
+    if current_user.is_authenticated :
+        current_user.ping()
+        if not current_user.confirmed and request.endpoint[:5] !='auth.'\
+                                        and request.endpoint !='static':
+            return redirect(url_for('auth.unconfirmed'))
 #is_authenticated()记录用户登录状态，登录返回True。
 #current_user是指当前用户，如果登录了，表示当前用户的代理。
 @auth.route('/unconfirmed')         #注册但是未邮箱确认的用户看到的路由
@@ -102,6 +104,8 @@ def reset_password():
             flash('An email with instructions to reset your password has been '
                   'sent to you.')
             return redirect(url_for('auth.login'))
+        else:
+            flash('you have not registed')
     return render_template('auth/reset_password.html',form=form)
 
 @auth.route('/reset/<token>',methods=['GET','POST'])#用来重置密码确认的

@@ -1,9 +1,19 @@
 #-*- coding:utf-8 -*-
 from werkzeug.security import generate_password_hash,check_password_hash
 from . import db,login_manager
-from flask_login import UserMixin       #导入认证用户的一系列支持
+from flask_login import UserMixin ,AnonymousUserMixin      #UserMixin是导入认证用户的一系列支持
+#AnonymousUserMixin是表示匿名用户的默认操作
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer     #为了生成确认令牌
-from flask import current_app
+from flask import current_app,request
+from datetime import datetime
+import hashlib
+
+class Permission:#权限常量
+    FOLLOW=0x01
+    COMMENT=0x02
+    WRITE_ACTICLES=0x04
+    MODERATE_COMMENTS=0x08
+    ADMINISTER=0x80
 
 class Role(db.Model):
     __tablename__='roles'
@@ -11,8 +21,28 @@ class Role(db.Model):
     name=db.Column(db.String(64),unique=True,index=True)
     users=db.relationship('User',backref='role',lazy='dynamic')
     #lazy='dynamic'表示不加载记录，但是提供加载记录的查询
+    default=db.Column(db.Boolean,default=False,index=True)
+    permissions=db.Column(db.Integer)#权限
     def __repr__(self):
         return '<Role %r>' % self.name
+
+    @staticmethod
+    def insert_roles():
+        roles={
+            'User':(Permission.FOLLOW|Permission.COMMENT |
+                    Permission.WRITE_ACTICLES,True),
+            'Moderator':(Permission.FOLLOW|Permission.COMMENT |
+                    Permission.WRITE_ACTICLES|Permission.MODERATE_COMMENTS,False),
+            'Administrator':(0xff,False)
+        }
+        for r in roles:
+            role=Role.query.filter_by(name=r).first()
+            if role is None:
+                role=Role(name=r)
+            role.permissions=roles[r][0]
+            role.default=roles[r][1]
+            db.session.add(role)
+        db.session.commit()
 
 class User(UserMixin,db.Model):
     __tablename__='users'
@@ -22,9 +52,36 @@ class User(UserMixin,db.Model):
     password_hash =db.Column(db.String(128))
     email=db.Column(db.String(64),unique=True,index=True)
     confirmed=db.Column(db.Boolean,default=False)   #判断用户是否已经确认过了
+    name=db.Column(db.String(64))
+    location=db.Column(db.String(64))
+    about_me=db.Column(db.Text())
+    member_since=db.Column(db.DateTime(),default=datetime.utcnow)
+    last_seen=db.Column(db.DateTime(),default=datetime.utcnow)#default为默认值，可直接指定函数
+    # 每次生成默认值的时候自动调用
+    avatar_hash = db.Column(db.String(32))
 
     def __repr__(self):
         return '<User %r>' % self.username
+
+    def __init__(self,**kwargs):        #初始化用户
+        super(User,self).__init__(**kwargs)
+        if self.role is None:
+            if self.email == current_app.config['FLASKY_ADMIN']:  #如果email为特定，就是管理员账户
+                self.role=Role.query.filter_by(permissions=0xff).first()
+            if self.role is None:                           #如果没有角色标签，就设置为普通用户User，
+                self.role=Role.query.filter_by(default=True).first()   #default为True对应的为User角色。
+        if self.email is not None and self.avatar_hash is None:     #通过用户email 计算出哈希值存入
+            self.avatar_hash=hashlib.md5(self.email.encode('utf-8')).hexdigest()
+
+    def can(self,permissions):
+        return self.role is not None and (self.role.permissions & permissions) ==permissions
+
+    def is_administrator(self):
+        return self.can(Permission.ADMINISTER)
+
+    def ping(self):
+        self.last_seen=datetime.utcnow()
+        db.session.add(self)
 
     @property       #规定了密码不能被读取
     def password(self):
@@ -83,9 +140,28 @@ class User(UserMixin,db.Model):
         if self.query.filter_by(email=new_email).first() is not None:
             return False
         self.email = new_email
+        self.avatar_hash=hashlib.md5(self.email.encode('utf-8')).hexdigest()
         db.session.add(self)
         return True
 
+    def gravatar(self,size=100,default='identicon',rating='g'):#构建Gravatar URL方法。
+        if request.is_secure:
+            url='https://secure.gravatar.com/avatar'
+        else:
+            url='https://www.gravatar.com/avatar'
+        hash=self.avatar_hash or hashlib.md5(self.email.encode('utf-8')).hexdigest()
+        return '{url}/{hash}?s={size}&d={default}&r={rating}'.format(url=url,hash=hash,size=size,default=default,rating=rating)
+#上述方法是将hash值发给gravatar的，用来表示用户头像。request.is_secure用来判断请求是http还是https。hash一行的意思是将一个
+#邮箱编码成utf8然后计算哈希值，后面的hexdigest（）是用来显示返回一个可以看见的16进制表达的hash值。
+
+class AnonymousUser(AnonymousUserMixin):#这个是我们定义的匿名用户的权限
+    def can(self,permissions):
+        return False
+
+    def is_administrator(self):
+        return False
+
+login_manager.anonymous_user=AnonymousUser      #创建匿名用户的实例
 
 @login_manager.user_loader      #用来回调用户的标识符来确认这个用户身份
 def load_user(user_id):
