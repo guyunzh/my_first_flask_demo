@@ -16,6 +16,7 @@ class Config():
     FLASKY_MAIL_SUBJECT_PREFIX = '[Flasky]'  #邮件主题前缀
     FLASKY_MAIL_SENDER = 'guyunzh@163.com'#发件人邮箱
     FLASKY_ADMIN = os.environ.get('FLASKY_ADMIN') or 'guyunzh@gmail.com'
+    FLASKY_POSTS_PER_PAGE = 20
 
     @staticmethod
     def init_app(app):#将函数变成一个静态方法，让类和实例都可以使用这个方法。与@classmethod不同

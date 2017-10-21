@@ -40,3 +40,7 @@ class EditProfileAdminForm(FlaskForm):#管理员的信息管理
     def validate_username(self,field):
         if field.data !=self.user.username and User.query.filter_by(username=field.data).first():
             raise ValidationError('Username already exit.')
+
+class PostForm(FlaskForm):
+    body=TextAreaField("What's on your mind?",validators=[Required()])
+    submit=SubmitField('Submit')
