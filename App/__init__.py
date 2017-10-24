@@ -6,12 +6,14 @@ from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 from config import config
 from flask_login import LoginManager
+from flask_pagedown import PageDown
 
 bootstrap = Bootstrap()
 db = SQLAlchemy()
 mail=Mail()
 moment=Moment()
 login_manager = LoginManager()
+pagedown=PageDown()
 
 def create_app(config_name):
     app = Flask(__name__)
@@ -21,6 +23,7 @@ def create_app(config_name):
     db.init_app(app)
     mail.init_app(app)
     moment.init_app(app)
+    pagedown.init_app(app)      #使用pagedown，为了编辑文本格式用的
     login_manager .init_app(app)    #初始化用户认证的实例
     login_manager.session_protection = 'strong'     #提供不同的安全等级
     login_manager.login_view = 'auth.login'         #设置登陆页面的端点

@@ -3,6 +3,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField,SubmitField,TextAreaField,BooleanField,SelectField,ValidationError
 from wtforms.validators import Required ,Length,Email,Regexp
 from ..models import Role,User
+from flask_pagedown.fields import PageDownField
 
 class NameForm(FlaskForm):
     '''
@@ -41,6 +42,6 @@ class EditProfileAdminForm(FlaskForm):#管理员的信息管理
         if field.data !=self.user.username and User.query.filter_by(username=field.data).first():
             raise ValidationError('Username already exit.')
 
-class PostForm(FlaskForm):
-    body=TextAreaField("What's on your mind?",validators=[Required()])
+class PostForm(FlaskForm): #主页的提交表单
+    body=PageDownField("What's on your mind?",validators=[Required()])
     submit=SubmitField('Submit')

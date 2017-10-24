@@ -6,7 +6,8 @@ from flask_login import UserMixin ,AnonymousUserMixin      #UserMixin是导入�
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer     #为了生成确认令牌
 from flask import current_app,request
 from datetime import datetime
-import hashlib
+import hashlib,bleach
+from markdown import markdown
 
 class Permission:#权限常量
     FOLLOW=0x01
@@ -44,6 +45,12 @@ class Role(db.Model):
             db.session.add(role)
         db.session.commit()
 
+class Follow(db.Model):
+    __tablename__='follows'
+    follower_id=db.Column(db.Integer,db.ForeignKey('users.id'),primary_key=True)
+    followed_id=db.Column(db.Integer,db.ForeignKey('users.id'),primary_key=True)
+    timestamp=db.Column(db.DateTime,default=datetime.utcnow)
+
 class User(UserMixin,db.Model):
     __tablename__='users'
     id=db.Column(db.Integer,primary_key=True)
@@ -60,6 +67,10 @@ class User(UserMixin,db.Model):
     # 每次生成默认值的时候自动调用
     avatar_hash = db.Column(db.String(32))
     posts=db.relationship('Post',backref='author',lazy='dynamic')
+    followed=db.relationship('Follow',foreign_keys=[Follow.follower_id],backref=db.backref('follower',lazy='joined'),
+                             lazy='dynamic',cascade='all,delete-orphan')
+    followers=db.relationship('Follow',foreign_keys=[Follow.followed_id],backref=db.backref('followed',lazy='joined'),
+                              lazy='dynamic',cascade='all,delete-orphan')
 
     def __repr__(self):
         return '<User %r>' % self.username
@@ -74,7 +85,7 @@ class User(UserMixin,db.Model):
         if self.email is not None and self.avatar_hash is None:     #通过用户email 计算出哈希值存入
             self.avatar_hash=hashlib.md5(self.email.encode('utf-8')).hexdigest()
 
-    def can(self,permissions):
+    def can(self,permissions):  #判断权限
         return self.role is not None and (self.role.permissions & permissions) ==permissions
 
     def is_administrator(self):
@@ -155,6 +166,10 @@ class User(UserMixin,db.Model):
 #上述方法是将hash值发给gravatar的，用来表示用户头像。request.is_secure用来判断请求是http还是https。hash一行的意思是将一个
 #邮箱编码成utf8然后计算哈希值，后面的hexdigest（）是用来显示返回一个可以看见的16进制表达的hash值。
 
+    @property       #通过联结查询数据
+    def followed_posts(self):
+        return Post.query.join(Follow,Follow.followed_id==Post.author_id).filter(Follow.follower_id==self.id)
+
     @staticmethod           #用来批量创建虚拟博客用户的
     def generate_fake( count=100):
         from sqlalchemy.exc import IntegrityError
@@ -177,6 +192,22 @@ class User(UserMixin,db.Model):
             except IntegrityError:
                 db.session.rollback()
 
+    def follow(self,user):          #用来创建关注关系的辅助方法,followed表示追随别人，follower表示粉丝
+        if not self.is_following(user):
+            f=Follow(follower=self,followed=user)
+            db.session.add(f)
+
+    def unfollow(self,user):
+        f=self.followed.filter_by(followed_id=user.id).first()
+        if f:
+            db.session.delete(f)
+
+    def is_following(self,user):
+        return self.followed.filter_by(followed_id=user.id).first() is not None
+
+    def is_followed_by(self,user):
+        return self.followers.filter_by(follower_id=user.id).first() is not None
+
 
 class AnonymousUser(AnonymousUserMixin):#这个是我们定义的匿名用户的权限
     def can(self,permissions):
@@ -197,8 +228,9 @@ class Post(db.Model):
     body=db.Column(db.Text )
     timestamp=db.Column(db.DateTime,index=True,default=datetime.utcnow)
     author_id=db.Column(db.Integer,db.ForeignKey('users.id'))
+    body_html=db.Column(db.Text)
 
-    @staticmethod
+    @staticmethod           #测试方法，用来生成大量随机数据
     def generate_fake(count=100):
         from random import seed,randint
         import forgery_py
@@ -210,3 +242,11 @@ class Post(db.Model):
             p=Post(body=forgery_py.lorem_ipsum.sentences(randint(1,3)),timestamp=forgery_py.date.date(True),author=u)
             db.session.add(p)
             db.session.commit()
+
+    @staticmethod
+    def on_changed_body(target,value,oldvalue,initiator):
+        allowed_tags=['a','abbr','acronym','b','blockquote','code','em','i','li','ol','pre','strong','ul',
+                      'h1','h2','h3','p']
+        target.body_html=bleach.linkify(bleach.clean(markdown(value,output_format='html'),
+                                                     tags=allowed_tags,strip=True))
+db.event.listen(Post.body,'set',Post.on_changed_body)
