@@ -18,6 +18,8 @@ class Config():
     FLASKY_ADMIN = os.environ.get('FLASKY_ADMIN') or 'guyunzh@gmail.com'
     FLASKY_POSTS_PER_PAGE = 20
     FLASKY_FOLLOWERS_PER_PAGE= 20
+    FLASKY_COMMENTS_PER_PAGE = 10
+
     @staticmethod
     def init_app(app):#将函数变成一个静态方法，让类和实例都可以使用这个方法。与@classmethod不同
         pass
