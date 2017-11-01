@@ -1,9 +1,9 @@
 # -*- coding:utf-8 -*-
-from flask import render_template, abort, flash, redirect, url_for, current_app, request,make_response
+from flask import render_template, abort, flash, redirect, url_for, current_app, request, make_response
 from . import main
 from flask_login import login_required, current_user
-from ..models import User, Post,Role, Permission,Comment
-from .forms import EditProfileForm, EditProfileAdminForm, PostForm,CommentForm
+from ..models import User, Post, Role, Permission, Comment
+from .forms import EditProfileForm, EditProfileAdminForm, PostForm, CommentForm
 from .. import db
 from ..decorators import admin_required, permission_required
 
@@ -17,24 +17,24 @@ def index():
         db.session.add(post)
         return redirect(url_for('.index'))
     page = request.args.get('page', 1, type=int)
-    show_followed=False
-    show_myself=False
+    show_followed = False
+    show_myself = False
     if current_user.is_authenticated:
-        show_followed = bool(request.cookies.get('show_followed',''))
-        show_myself = bool(request.cookies.get('show_myself',''))
+        show_followed = bool(request.cookies.get('show_followed', ''))
+        show_myself = bool(request.cookies.get('show_myself', ''))
     if show_followed:
-        query=current_user.followed_posts.order_by(Post.timestamp.desc())
+        query = current_user.followed_posts.order_by(Post.timestamp.desc())
     elif show_myself:
-        query=current_user.posts.order_by(Post.timestamp.desc())
+        query = current_user.posts.order_by(Post.timestamp.desc())
     else:
-        query=Post.query.order_by(Post.timestamp.desc())
+        query = Post.query.order_by(Post.timestamp.desc())
     pagination = query.paginate(
         page, per_page=current_app.config['FLASKY_POSTS_PER_PAGE'], error_out=False
     )
     posts = pagination.items
     # posts=Post.query.order_by(Post.timestamp.desc()).all()
     return render_template('index.html', form=form, posts=posts, show_followed=show_followed,
-                           show_myself=show_myself,pagination=pagination)
+                           show_myself=show_myself, pagination=pagination)
 
 
 @main.route('/user/<username>')  # 用户资料显示页面
@@ -90,26 +90,26 @@ def edit_profile_admin(id):  # 管理员修改页面
     return render_template('edit_profile.html', form=form, user=user)
 
 
-@main.route('/post/<int:id>',methods=['GET','POST'])
+@main.route('/post/<int:id>', methods=['GET', 'POST'])
 def post(id):
     post = Post.query.get_or_404(id)
-    form=CommentForm()
+    form = CommentForm()
     if form.validate_on_submit():
         comment = Comment(body=form.body.data,
                           post=post,
                           author=current_user._get_current_object())
         db.session.add(comment)
         flash('Your comment has been published.')
-        return redirect(url_for('.post',id=post.id,page=-1))
-    page=request.args.get('page',1,type=int)
-    if page ==-1:
-        page=(post.comments.count()-1) / \
-            current_app.config['FLASKY_COMMENTS_PER_PAGE'] +1
-    pagination =post.comments.order_by(Comment.timestamp.asc()).paginate(
-        page,per_page=current_app.config['FLASKY_COMMENTS_PER_PAGE'],
-        error_out=False )
-    comments=pagination.items
-    return render_template('post.html',posts=[post],form=form,comments=comments,pagination=pagination)
+        return redirect(url_for('.post', id=post.id, page=-1))
+    page = request.args.get('page', 1, type=int)
+    if page == -1:
+        page = (post.comments.count() - 1) / \
+               current_app.config['FLASKY_COMMENTS_PER_PAGE'] + 1
+    pagination = post.comments.order_by(Comment.timestamp.asc()).paginate(
+        page, per_page=current_app.config['FLASKY_COMMENTS_PER_PAGE'],
+        error_out=False)
+    comments = pagination.items
+    return render_template('post.html', posts=[post], form=form, comments=comments, pagination=pagination)
 
 
 @main.route('/edit/<int:id>', methods=['GET', 'POST'])  # 修改文章的
@@ -191,8 +191,8 @@ def followed_by(username):
 @main.route('/all')
 @login_required
 def show_all():
-    resp=make_response(redirect(url_for('.index')))
-    resp.set_cookie('show_followed','',max_age=30*24*60*60)
+    resp = make_response(redirect(url_for('.index')))
+    resp.set_cookie('show_followed', '', max_age=30 * 24 * 60 * 60)
     resp.set_cookie('show_myself', '')
     return resp
 
@@ -201,7 +201,7 @@ def show_all():
 @login_required
 def show_followed():
     resp = make_response(redirect(url_for('.index')))
-    resp.set_cookie('show_followed','1',max_age=30*24*60*60)
+    resp.set_cookie('show_followed', '1', max_age=30 * 24 * 60 * 60)
     resp.set_cookie('show_myself', '')
     return resp
 
@@ -209,22 +209,22 @@ def show_followed():
 @main.route('/myself')
 @login_required
 def show_myself():
-    resp=make_response(redirect(url_for('.index')))
+    resp = make_response(redirect(url_for('.index')))
     resp.set_cookie('show_followed', '')
     resp.set_cookie('show_myself', '1', max_age=30 * 24 * 60 * 60)
     return resp
 
 
-@main.route('/moderate')            #用来管理评论的显示视图
+@main.route('/moderate')  # 用来管理评论的显示视图
 @login_required
 @permission_required(Permission.MODERATE_COMMENTS)
 def moderate():
-    page = request.args.get('page',1,type=int)
-    pagination=Comment.query.order_by(Comment.timestamp.desc()).paginate(
-        page,per_page=current_app.config['FLASKY_COMMENTS_PER_PAGE'],
-        error_out=False    )
-    comments=pagination.items
-    return render_template('moderate.html',comments=comments,pagination=pagination,page=page)
+    page = request.args.get('page', 1, type=int)
+    pagination = Comment.query.order_by(Comment.timestamp.desc()).paginate(
+        page, per_page=current_app.config['FLASKY_COMMENTS_PER_PAGE'],
+        error_out=False)
+    comments = pagination.items
+    return render_template('moderate.html', comments=comments, pagination=pagination, page=page)
 
 
 @main.route('/moderate/enable/<int:id>')
@@ -234,7 +234,7 @@ def moderate_enable(id):
     comment = Comment.query.get_or_404(id)
     comment.disabled = False
     db.session.add(comment)
-    return redirect(url_for('.moderate',page=request.args.get('page',1,type=int)))
+    return redirect(url_for('.moderate', page=request.args.get('page', 1, type=int)))
 
 
 @main.route('/moderate/disable/<int:id>')
@@ -244,26 +244,5 @@ def moderate_disable(id):
     comment = Comment.query.get_or_404(id)
     comment.disabled = True
     db.session.add(comment)
-    return redirect(url_for('.moderate',page=request.args.get('page',1,type=int)))
+    return redirect(url_for('.moderate', page=request.args.get('page', 1, type=int)))
 
-
-
-# @main.route('/')
-# @main.route('/',methods=['GET','POST'])
-# def index():
-#     form=NameForm()#创建一个表格
-#     if form.validate_on_submit():#用户点击提交按钮
-#         user=User.query.filter_by(username=form.name.data).first()#从数据库中查找
-#         if user is None:
-#             user=User(username=form.name.data)
-#             db.session.add(user)
-#             session['known']=False
-#             if current_app.config['FLASKY_ADMIN']:
-#                 send_email(current_app.config['FLASKY_ADMIN'],'New User',
-#                            'mail/new_user',user=user)
-#         else:
-#             session['known']=True
-#         session['name']=form.name.data
-#         return redirect(url_for('.index'))
-#     return render_template('index.html',form=form,name=session.get('name'),
-#                            known=session.get('known', False))
